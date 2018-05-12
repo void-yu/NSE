@@ -1,6 +1,7 @@
 # Data
 data/
 history/
+/.idea/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -70,8 +71,6 @@ docs/_build/
 
 # PyBuilder
 target/
-.idea/
-.idea
 
 # Jupyter Notebook
 .ipynb_checkpoints
