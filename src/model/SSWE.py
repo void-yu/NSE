@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from scipy import stats
 
 import input_layer
 
@@ -13,9 +14,10 @@ flags.DEFINE_string('VALID_CLASS', 'validate_classification.tfrecords', '')
 flags.DEFINE_string('input_dir', 'D://Codes/NSE/data/output', 'Path to the output folder.')
 flags.DEFINE_string('vocab_file', 'D://Codes/NSE/data/output/vocab_unigram.txt', 'Path to the vocabulary file.')
 flags.DEFINE_string('vocab_freqs_file', 'D://Codes/NSE/data/output/vocab_unigram_freq.txt', 'Path to the vocabulary frequence file.')
+flags.DEFINE_string('simlex_999', 'D://Codes/NSE/data/raw/embeddingTest/simlex999.txt', 'Path to the Hill et al.s(2014) SimeLex-999.')
 
 flags.DEFINE_integer('num_classes', 2, 'Number of classes for classification')
-flags.DEFINE_integer('batch_size', 128, 'Size of the batch.')
+flags.DEFINE_integer('batch_size', 1, 'Size of the batch.')
 flags.DEFINE_integer('num_timesteps', 100, 'Number of timesteps for BPTT')
 flags.DEFINE_integer('vocab_size', 71458, '')
 flags.DEFINE_integer('embedding_size', 50, '')
@@ -39,6 +41,7 @@ class SSWE_u(object):
                  normalized=False,
                  loss_mix_weight=0.5):
         self.layers = {}
+        self.output = {}
         self.vocab_size = vocab_size
         self.embedding_size = embedding_size
         self.normalized = normalized
@@ -109,13 +112,9 @@ class SSWE_u(object):
 
         # last-linear_x
         expect = tf.matmul(nolineared, self.layers['W_2']) + self.layers['b_2']
-        if self.linear_keep_prob < 1.:
-            expect = tf.nn.dropout(expect, keep_prob=self.linear_keep_prob)
 
         # last-linear_fake_x
         fake_expect = tf.matmul(fake_nolineared, self.layers['W_2']) + self.layers['b_2']
-        if self.linear_keep_prob < 1.:
-            fake_expect = tf.nn.dropout(fake_expect, keep_prob=self.linear_keep_prob)
 
         # mixed-rank-loss
         syn_expect = expect[:, 0]
@@ -124,21 +123,32 @@ class SSWE_u(object):
         fake_sen_expect = fake_expect[:, 1]
         syn_loss = tf.maximum(tf.zeros_like(syn_expect), tf.ones_like(syn_expect) - syn_expect + fake_syn_expect)
         sen_loss = tf.maximum(tf.zeros_like(sen_expect), tf.ones_like(sen_expect) - tf.multiply(label, sen_expect) + tf.multiply(label, fake_sen_expect))
-        loss = self.loss_mix_weight * syn_loss + (1 - self.loss_mix_weight) * sen_loss
-        # self.syn_expect = syn_expect
-        # self.fake_syn_expect = fake_syn_expect
-        # self.sen_expect = sen_expect
-        # self.fake_sen_expect = fake_sen_expect
-        self.loss = tf.reduce_mean(loss)
+        loss = tf.reduce_sum(self.loss_mix_weight * syn_loss + (1 - self.loss_mix_weight) * sen_loss)
 
-        self.opt = tf.train.AdagradOptimizer(learning_rate=0.01).minimize(loss)
+        self.opt = tf.train.AdagradOptimizer(learning_rate=0.1).minimize(loss)
 
-        # collect_summary
-        self.train_scalar = tf.summary.scalar('train_loss', loss)
+        # collect_summary_and_print_message
+        self.output['train_loss'] = loss
+        self.output['syn_expect'] = syn_expect
+        self.output['fake_syn_expect'] = fake_syn_expect
+        self.output['sen_expect'] = sen_expect
+        self.output['fake_sen_expect'] = fake_sen_expect
+        tf.summary.scalar('train_loss', loss)
+
+
+    def build_word_similarity_graph(self):
+        self.word_A_id = tf.placeholder(tf.int32, shape=[None])
+        self.word_B_id = tf.placeholder(tf.int32, shape=[None])
+        normed_embedding = tf.nn.l2_normalize(self.layers['embedding'], dim=1)
+        word_A_normed_embedding = tf.nn.embedding_lookup(normed_embedding, self.word_A_id)
+        word_B_normed_embedding = tf.nn.embedding_lookup(normed_embedding, self.word_B_id)
+        self.output['eval_score'] = tf.reduce_sum(np.multiply(word_A_normed_embedding, word_B_normed_embedding), 1)
 
 
 
 def main(_):
+    simlex = input_layer.get_simlex999(FLAGS.vocab_file)
+
     vocab_freqs = input_layer.get_vocab_freqs(
         path=FLAGS.vocab_freqs_file,
         vocab_size=FLAGS.vocab_size)
@@ -152,6 +162,7 @@ def main(_):
         linear_keep_prob=FLAGS.linear_keep_prob,
         normalized=FLAGS.embedding_normalized,
         loss_mix_weight=FLAGS.loss_mix_weight)
+    model.build_word_similarity_graph()
     train_input = input_layer.get_batch(
         data_dir=FLAGS.input_dir,
         fname=FLAGS.TRAIN_CLASS,
@@ -169,11 +180,15 @@ def main(_):
             while not coord.should_stop():
                 random_input = np.reshape(np.random.choice(FLAGS.vocab_size, FLAGS.batch_size), newshape=[-1, 1])
 
-                # _, syn, fasyn, sen, fasen, loss = sess.run([model.opt, model.syn_expect, model.fake_syn_expect, model.sen_expect, model.fake_sen_expect, model.loss],
-                #                                            feed_dict={model.fake_tokens: random_input})
-                # print(syn, fasyn, sen, fasen, loss)
-                _, loss = sess.run([model.opt, model.loss], feed_dict={model.fake_tokens: random_input})
-                print(loss)
+                _, syn, fasyn, sen, fasen, loss = sess.run([model.opt, model.output['syn_expect'], model.output['fake_syn_expect'], model.output['sen_expect'], model.output['fake_sen_expect'], model.output['train_loss']],
+                                                           feed_dict={model.fake_tokens: random_input})
+                print(syn, fasyn, sen, fasen, loss)
+
+                _, loss = sess.run([model.opt, model.output['train_loss']], feed_dict={model.fake_tokens: random_input})
+                train_ranking = sess.run(model.output['eval_score'],
+                                         feed_dict={model.word_A_id: simlex[:, 0], model.word_B_id: simlex[:, 1]})
+                print(stats.pearsonr(simlex[:, 2], train_ranking)[0], stats.spearmanr(simlex[:, 2], train_ranking).correlation)
+                # print(loss)
 
         except tf.errors.OutOfRangeError:
             tf.logging.info('Done training -- epoch limit reached')

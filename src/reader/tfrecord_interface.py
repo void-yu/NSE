@@ -61,3 +61,4 @@ def _read_and_batch(data_path, batch_size):
         batch_size=batch_size,
     )
     return batch
+
