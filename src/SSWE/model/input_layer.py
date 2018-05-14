@@ -2,10 +2,9 @@ import pandas as pd
 import numpy as np
 import csv
 import os
-import re
 import tensorflow as tf
 
-from src.reader import tfrecord_interface
+from src.SSWE.reader import tfrecord_interface
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS

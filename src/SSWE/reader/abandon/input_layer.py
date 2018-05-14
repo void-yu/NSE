@@ -1,7 +1,7 @@
 import os
 import tensorflow as tf
 
-from src.reader.abandon import data_utils
+from src.SSWE.reader.abandon import data_utils
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
