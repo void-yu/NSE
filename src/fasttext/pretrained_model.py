@@ -1,32 +1,14 @@
-#!/usr/bin/env python
-"""
-This demo implements FastText[1] for sentence classification.
-FastText is a simple model for text classification with performance often close
-to state-of-the-art, and is useful as a solid baseline.
-There are some important differences between this implementation and what
-is described in the paper. Instead of Hogwild! SGD[2], we use Adam optimizer
-with mini-batches. Hierarchical softmax is also not supported; if you have
-a large label space, consider utilizing candidate sampling methods provided
-by TensorFlow[3].
-After 5 epochs, you should get test accuracy close to 90.9%.
-[1] Joulin, A., Grave, E., Bojanowski, P., & Mikolov, T. (2016).
-    Bag of Tricks for Efficient Text Classification.
-    http://arxiv.org/abs/1607.01759
-[2] Recht, B., Re, C., Wright, S., & Niu, F. (2011).
-    Hogwild: A Lock-Free Approach to Parallelizing Stochastic Gradient Descent.
-    In Advances in Neural Information Processing Systems 24 (pp. 693–701).
-[3] https://www.tensorflow.org/api_guides/python/nn#Candidate_Sampling
-"""
-
 import array
 import hashlib
 import time
-import os
+import logging
 import pickle
+import os
 import numpy as np
 import tensorflow as tf
 
 import tensorlayer as tl
+
 
 # Hashed n-grams with 1 < n <= N_GRAM are included as features
 # in addition to unigrams.
@@ -34,16 +16,17 @@ N_GRAM = 1
 
 # Size of vocabulary; less frequent words will be treated as "unknown"
 # VOCAB_SIZE = 100000
-VOCAB_SIZE = 64191
+VOCAB_SIZE = 64191-2
 
 # Number of buckets used for hashing n-grams
-N_BUCKETS = 100000
+# N_BUCKETS = 100000+2
+N_BUCKETS = 2
 
 # Size of the embedding vectors
 EMBEDDING_SIZE = 300
 
 # Number of epochs for which the model is trained
-N_EPOCH = 3
+N_EPOCH = 5
 
 # Size of training mini-batches
 BATCH_SIZE = 32
@@ -52,11 +35,104 @@ BATCH_SIZE = 32
 MODEL_FILE_PATH = 'save/demo/'
 
 
+# t_pkl = open('D://Codes/NSE/data/output/train_data.pkl', 'rb')
+# train = pickle.load(t_pkl)
+# print(train[0])
+# v_pkl = open('D://Codes/NSE/data/output/valid_data.pkl', 'rb')
+# valid = pickle.load(v_pkl)
+# print(np.shape(valid))
+#
+#
+# # VOCAB_SIZE = 100000
+# #
+# X_train, y_train, X_test, y_test = tl.files.load_imdb_dataset(nb_words=10000)
+#
+# print(X_train)
+# print(y_train)
+# # for X_batch, y_batch in tl.iterate.minibatches(X_train, y_train, batch_size=30, shuffle=True):
+# #     print(np.shape(X_batch))
+# #     print(np.shape(y_batch))
+
+class AverageMixEmbeddingInputlayer(tl.layers.Layer):
+
+    def __init__(
+            self,
+            inputs,
+            pretrained_vocab_size,
+            uninited_vocabulary_size,
+            embedding_size,
+            pad_value=0,
+            embeddings_initializer=tf.random_uniform_initializer(-0.1, 0.1),
+            embeddings_kwargs=None,
+            name='average_embedding',
+    ):
+
+        super(AverageMixEmbeddingInputlayer, self).__init__(prev_layer=None, name=name)
+        logging.info("MixEmbeddingInputlayer %s: (%d, %d)" % (name, pretrained_vocab_size+uninited_vocabulary_size, embedding_size))
+
+        # if embeddings_kwargs is None:
+        #     embeddings_kwargs = {}
+
+        if inputs.get_shape().ndims != 2:
+            raise ValueError('inputs must be of size batch_size * batch_sentence_length')
+
+        self.inputs = inputs
+
+        with tf.variable_scope(name):
+            self.pretrained_embeddings = tf.placeholder(tl.layers.LayersConfig.tf_dtype, shape=[pretrained_vocab_size, embedding_size], name='pretrained_embeddings')
+            self.turnable_embeddings = tf.Variable(self.pretrained_embeddings, name='turnable_embeddings')
+            self.uninited_embeddings = tf.get_variable(
+                name='uninited_embeddings', shape=(uninited_vocabulary_size, embedding_size), initializer=embeddings_initializer,
+                dtype=tl.layers.LayersConfig.tf_dtype,
+                **(embeddings_kwargs or {})
+                # **embeddings_kwargs
+            )  # **(embeddings_kwargs or {}),
+
+            mixed_embeddings = tf.concat([self.turnable_embeddings, self.uninited_embeddings], axis=0)
+
+            word_embeddings = tf.nn.embedding_lookup(
+                mixed_embeddings,
+                self.inputs,
+                name='word_embeddings',
+            )
+            # Zero out embeddings of pad value
+            masks = tf.not_equal(self.inputs, pad_value, name='masks')
+            word_embeddings *= tf.cast(
+                tf.expand_dims(masks, axis=-1),
+                # tf.float32,
+                dtype=tl.layers.LayersConfig.tf_dtype,
+            )
+            sum_word_embeddings = tf.reduce_sum(word_embeddings, axis=1)
+
+            # Count number of non-padding words in each sentence
+            sentence_lengths = tf.count_nonzero(
+                masks,
+                axis=1,
+                keepdims=True,
+                # dtype=tf.float32,
+                dtype=tl.layers.LayersConfig.tf_dtype,
+                name='sentence_lengths',
+            )
+
+            sentence_embeddings = tf.divide(
+                sum_word_embeddings,
+                sentence_lengths + 1e-8,  # Add epsilon to avoid dividing by 0
+                name='sentence_embeddings'
+            )
+
+        self.outputs = sentence_embeddings
+        self.all_layers = [self.outputs]
+        self.all_params = [self.turnable_embeddings, self.uninited_embeddings]
+        self.all_drop = {}
+
+
+
 class FastTextClassifier(object):
     """Simple wrapper class for creating the graph of FastText classifier."""
 
-    def __init__(self, vocab_size, embedding_size, n_labels):
+    def __init__(self, vocab_size, bucket_size, embedding_size, n_labels):
         self.vocab_size = vocab_size
+        self.bucket_size = bucket_size
         self.embedding_size = embedding_size
         self.n_labels = n_labels
 
@@ -64,8 +140,9 @@ class FastTextClassifier(object):
         self.labels = tf.placeholder(tf.int32, shape=[None], name='labels')
 
         # Network structure
-        network = tl.layers.AverageEmbeddingInputlayer(self.inputs, self.vocab_size, self.embedding_size)
-        self.network = tl.layers.DenseLayer(network, self.n_labels)
+        self.embeddings = AverageMixEmbeddingInputlayer(self.inputs, self.vocab_size, self.bucket_size, self.embedding_size)
+        self.network = tl.layers.DenseLayer(self.embeddings, self.n_labels)
+        # self.all_params = [self.embeddings.pretrained_embeddings] + self.network.all_params
 
         # Training operation
         cost = tl.cost.cross_entropy(self.network.outputs, self.labels, name='cost')
@@ -88,6 +165,23 @@ class FastTextClassifier(object):
         tl.files.load_and_assign_npz(sess, name=filename, network=self.network)
 
 
+def get_vecs():
+    vecs = []
+    words = []
+    with open('D://Codes/NSE/data/used/embeddings/word-picked.vec', "r", encoding='utf8') as f:
+        for line in f:
+            s = line.split()
+            if len(s) == 2:
+                continue
+            v = np.array([float(x) for x in s[1:]])
+            if len(vecs) and vecs[-1].shape != v.shape:
+                print("Got weird line", line)
+                continue
+            words.append(s[0])
+            vecs.append(v)
+    return words, vecs
+
+
 def augment_with_ngrams(unigrams, unigram_vocab_size, n_buckets, n=2):
     """Augment unigram features with hashed n-gram features."""
 
@@ -101,16 +195,6 @@ def augment_with_ngrams(unigrams, unigram_vocab_size, n_buckets, n=2):
 
     return unigrams + [hash_ngram(ngram) for i in range(2, n + 1) for ngram in get_ngrams(i)]
 
-
-# def load_and_preprocess_imdb_data(n_gram=None):
-#     """Load IMDb data and augment with hashed n-gram features."""
-#     X_train, y_train, X_test, y_test = tl.files.load_imdb_dataset(nb_words=VOCAB_SIZE)
-#
-#     if n_gram is not None:
-#         X_train = np.array([augment_with_ngrams(x, VOCAB_SIZE, N_BUCKETS, n=n_gram) for x in X_train])
-#         X_test = np.array([augment_with_ngrams(x, VOCAB_SIZE, N_BUCKETS, n=n_gram) for x in X_test])
-#
-#     return X_train, y_train, X_test, y_test
 
 def load_and_preprocess_imdb_data(n_gram=None):
     t_pkl = open('D://Codes/NSE/data/output/train_data.pkl', 'rb')
@@ -148,15 +232,17 @@ def load_and_preprocess_imdb_test_data(n_gram=None):
 
 def train_valid_and_save_model():
     X_train, y_train, X_valid, y_valid = load_and_preprocess_imdb_data(N_GRAM)
+    w, pretrained_wv = get_vecs()
     classifier = FastTextClassifier(
-        # vocab_size=VOCAB_SIZE + N_BUCKETS,
         vocab_size=VOCAB_SIZE,
+        bucket_size=N_BUCKETS,
         embedding_size=EMBEDDING_SIZE,
-        n_labels=2,
+        n_labels=2
     )
-
     with tf.Session() as sess:
-        tl.layers.initialize_global_variables(sess)
+        init = tf.global_variables_initializer()
+        sess.run(init, feed_dict={classifier.embeddings.pretrained_embeddings: pretrained_wv})
+        # sess.run(init)
 
         i = 0
         for epoch in range(N_EPOCH):
@@ -164,6 +250,7 @@ def train_valid_and_save_model():
             print('Epoch %d/%d' % (epoch + 1, N_EPOCH))
             for X_batch, y_batch in tl.iterate.minibatches(X_train, y_train, batch_size=BATCH_SIZE, shuffle=True):
                 i += 1
+
                 sess.run(
                     classifier.train_op, feed_dict={
                         classifier.inputs: tl.prepro.pad_sequences(X_batch),
@@ -187,15 +274,19 @@ def train_valid_and_save_model():
 
 
 def load_and_test_model():
+    # w, pretrained_wv = get_vecs()
+
     X_test, y_test = load_and_preprocess_imdb_test_data(N_GRAM)
     classifier = FastTextClassifier(
-        # vocab_size=VOCAB_SIZE + N_BUCKETS,
         vocab_size=VOCAB_SIZE,
+        bucket_size=N_BUCKETS,
         embedding_size=EMBEDDING_SIZE,
         n_labels=2,
     )
-
     with tf.Session() as sess:
+        # init = tf.global_variables_initializer()
+        # sess.run(init, feed_dict={classifier.embeddings.pretrained_embeddings: pretrained_wv})
+        # sess.run(init)
         foldername = MODEL_FILE_PATH
         pathDir = os.listdir(foldername)
         for filename in pathDir:
@@ -218,9 +309,6 @@ def load_and_test_model():
             test_accuracy = np.mean(test_accuracy)
             print('Test accuracy: %.5f' % test_accuracy)
             print("took %.5fs" % (time.time() - start_time))
-
-
-
 
 
 if __name__ == '__main__':

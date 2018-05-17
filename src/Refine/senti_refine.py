@@ -39,7 +39,7 @@ def find_senti_direction(topK=1):
     for index in range(len(sub_words_p)):
         wp = sub_words_p[index]
         wn = sub_words_n[index]
-        if wp not in picked.index or wn not in picked.words:
+        if wp not in picked.words or wn not in picked.words:
             print(wp, wn, 'not in word-picked.vec')
             continue
         definitional.append([wp, wn])
@@ -73,7 +73,7 @@ def refine_word(lexicon, direction, alpha=0.5):
             new_vec = vec_vertical_to_senti + alpha * new_vec_senti
             new_vec = new_vec / np.linalg.norm(new_vec)
             vecs[word] = new_vec
-    save(words.keys(), vecs.values(), 'D://Codes/NSE/data/used/embeddings/refined-word-picked.vec')
+    save(words.keys(), vecs.values(), 'D://Codes/NSE/data/used/embeddings/'+str(alpha)+'-refined-word-picked.vec')
 
 
 
@@ -120,13 +120,13 @@ def get_simverb3500():
         print('Get %s pairs from SimVerb-3500' % np.shape(evals)[0])
         return evals
 
-
 # lexicon = get_sentiwords()
 # dire = find_senti_direction(1)
-# refine_word(lexicon, dire)
+# refine_word(lexicon, dire, alpha=10)
+
 
 def eval_w2v_wordsim(simlex):
-    refined = we.WordEmbedding('D://Codes/NSE/data/used/embeddings/word-picked.vec')
+    refined = we.WordEmbedding('D://Codes/NSE/data/used/embeddings/10-refined-word-picked.vec')
     results = []
 
     for pair in simlex:
