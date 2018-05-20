@@ -32,26 +32,10 @@ N_EPOCH = 5
 BATCH_SIZE = 32
 
 # Path to which to save the trained model
-MODEL_FILE_PATH = 'save/inited_refined_2_unigram/'
-PRETRAINED_VECS_PATH = 'D://Codes/NSE/data/used/embeddings/fasttext/20-refined-word-picked.vec'
+MODEL_FILE_PATH = 'save/demo/'
+PRETRAINED_VECS_PATH = 'D://Codes/NSE/data/used/embeddings/10-refined-word-picked.vec'
 
-# t_pkl = open('D://Codes/NSE/data/output/train_data.pkl', 'rb')
-# train = pickle.load(t_pkl)
-# print(train[0])
-# v_pkl = open('D://Codes/NSE/data/output/valid_data.pkl', 'rb')
-# valid = pickle.load(v_pkl)
-# print(np.shape(valid))
-#
-#
-# # VOCAB_SIZE = 100000
-# #
-# X_train, y_train, X_test, y_test = tl.files.load_imdb_dataset(nb_words=10000)
-#
-# print(X_train)
-# print(y_train)
-# # for X_batch, y_batch in tl.iterate.minibatches(X_train, y_train, batch_size=30, shuffle=True):
-# #     print(np.shape(X_batch))
-# #     print(np.shape(y_batch))
+
 
 class AverageMixEmbeddingInputlayer(tl.layers.Layer):
 
@@ -80,7 +64,6 @@ class AverageMixEmbeddingInputlayer(tl.layers.Layer):
 
         with tf.variable_scope(name):
             self.pretrained_embeddings = tf.placeholder(tl.layers.LayersConfig.tf_dtype, shape=[pretrained_vocab_size, embedding_size], name='pretrained_embeddings')
-            self.turnable_embeddings = tf.Variable(self.pretrained_embeddings, name='turnable_embeddings')
             self.uninited_embeddings = tf.get_variable(
                 name='uninited_embeddings', shape=(uninited_vocabulary_size, embedding_size), initializer=embeddings_initializer,
                 dtype=tl.layers.LayersConfig.tf_dtype,
@@ -88,7 +71,7 @@ class AverageMixEmbeddingInputlayer(tl.layers.Layer):
                 # **embeddings_kwargs
             )  # **(embeddings_kwargs or {}),
 
-            mixed_embeddings = tf.concat([self.turnable_embeddings, self.uninited_embeddings], axis=0)
+            mixed_embeddings = tf.concat([self.pretrained_embeddings, self.uninited_embeddings], axis=0)
 
             word_embeddings = tf.nn.embedding_lookup(
                 mixed_embeddings,
@@ -122,7 +105,7 @@ class AverageMixEmbeddingInputlayer(tl.layers.Layer):
 
         self.outputs = sentence_embeddings
         self.all_layers = [self.outputs]
-        self.all_params = [self.turnable_embeddings, self.uninited_embeddings]
+        self.all_params = [self.uninited_embeddings]
         self.all_drop = {}
 
 
@@ -241,7 +224,7 @@ def train_valid_and_save_model():
     )
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
-        sess.run(init, feed_dict={classifier.embeddings.pretrained_embeddings: pretrained_wv})
+        sess.run(init)
         # sess.run(init)
 
         i = 0
@@ -253,8 +236,9 @@ def train_valid_and_save_model():
 
                 sess.run(
                     classifier.train_op, feed_dict={
-                        classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
+                        classifier.inputs: tl.prepro.pad_sequences(X_batch),
                         classifier.labels: y_batch,
+                        classifier.embeddings.pretrained_embeddings: pretrained_wv
                     }
                 )
 
@@ -263,7 +247,7 @@ def train_valid_and_save_model():
 
                     valid_accuracy = sess.run(
                         classifier.accuracy, feed_dict={
-                            classifier.inputs: tl.prepro.pad_sequences(X_valid, value=64189),
+                            classifier.inputs: tl.prepro.pad_sequences(X_valid),
                             classifier.labels: y_valid,
                         }
                     )
@@ -300,8 +284,7 @@ def load_and_test_model():
             for X_batch, y_batch in tl.iterate.minibatches(X_test, y_test, batch_size=BATCH_SIZE, shuffle=False):
                 acc = sess.run(
                     classifier.accuracy, feed_dict={
-                        # classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
-                        classifier.inputs: tl.prepro.pad_sequences(X_batch, value=0),
+                        classifier.inputs: tl.prepro.pad_sequences(X_batch),
                         classifier.labels: y_batch,
                         # classifier.embedding.pretrained_embeddings: pretrained_wv
                     })
@@ -312,40 +295,7 @@ def load_and_test_model():
             print("took %.5fs" % (time.time() - start_time))
 
 
-
-
-def load_and_test_distilled_model():
-    X_test, y_test = load_and_preprocess_imdb_test_data(N_GRAM)
-    classifier = FastTextClassifier(
-        vocab_size=VOCAB_SIZE,
-        bucket_size=N_BUCKETS,
-        embedding_size=EMBEDDING_SIZE,
-        n_labels=2,
-    )
-    with tf.Session() as sess:
-        classifier.load(sess, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_1.npz')
-        distilled_vecs = np.load('D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_1_distilled.npy')
-        tl.files.assign_params(sess, [distilled_vecs], classifier.network)
-
-        start_time = time.time()
-        test_accuracy = []
-
-        for X_batch, y_batch in tl.iterate.minibatches(X_test, y_test, batch_size=BATCH_SIZE, shuffle=False):
-            acc = sess.run(
-                classifier.accuracy, feed_dict={
-                    classifier.inputs: tl.prepro.pad_sequences(X_batch, value=0),
-                    # classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
-                    classifier.labels: y_batch,
-                    # classifier.embedding.pretrained_embeddings: pretrained_wv
-                })
-            test_accuracy.append(acc)
-
-        test_accuracy = np.mean(test_accuracy)
-        print('Test accuracy: %.5f' % test_accuracy)
-        print("took %.5fs" % (time.time() - start_time))
-
 if __name__ == '__main__':
-    # with tf.device("/cpu:0"):
-    #     train_valid_and_save_model()
-    # load_and_test_model()
-    load_and_test_distilled_model()
+    with tf.device("/cpu:0"):
+        train_valid_and_save_model()
+        # load_and_test_model()

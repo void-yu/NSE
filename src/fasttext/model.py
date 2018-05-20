@@ -222,8 +222,38 @@ def load_and_test_model():
 
 
 
+def load_and_test_distilled_model():
+    X_test, y_test = load_and_preprocess_imdb_test_data(N_GRAM)
+    classifier = FastTextClassifier(
+        vocab_size=VOCAB_SIZE,
+        embedding_size=EMBEDDING_SIZE,
+        n_labels=2,
+    )
+    with tf.Session() as sess:
+        classifier.load(sess, 'D://Codes/NSE/src/fasttext/save/uninited_unigram/model_1.npz')
+        distilled_vecs = np.load('D://Codes/NSE/src/fasttext/save/uninited_unigram/model_1_distilled.npy')
+        tl.files.assign_params(sess, [distilled_vecs], classifier.network)
+
+        start_time = time.time()
+        test_accuracy = []
+
+        for X_batch, y_batch in tl.iterate.minibatches(X_test, y_test, batch_size=BATCH_SIZE, shuffle=False):
+            acc = sess.run(
+                classifier.accuracy, feed_dict={
+                    classifier.inputs: tl.prepro.pad_sequences(X_batch, value=0),
+                    # classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
+                    classifier.labels: y_batch,
+                    # classifier.embedding.pretrained_embeddings: pretrained_wv
+                })
+            test_accuracy.append(acc)
+
+        test_accuracy = np.mean(test_accuracy)
+        print('Test accuracy: %.5f' % test_accuracy)
+        print("took %.5fs" % (time.time() - start_time))
+
 
 if __name__ == '__main__':
-    with tf.device("/cpu:0"):
-        train_valid_and_save_model()
+    # with tf.device("/cpu:0"):
+        # train_valid_and_save_model()
         # load_and_test_model()
+    load_and_test_distilled_model()

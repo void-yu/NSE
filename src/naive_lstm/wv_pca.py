@@ -68,13 +68,18 @@ def find_senti_direction(words, word2index, vecs, topK=1):
 
 words, word2index, vecs = get_vecs(wordpath='D://Codes/NSE/data/used/embeddings/word-picked',
                                    vecpath='D://Codes/NSE/data/used/embeddings/fasttext/20-refined-word-picked.vec')
-turned_vecs = tl.files.load_npz(name='D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4.npz')[0]
-# turned_vecs_2 = tl.files.load_npz(name='D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_1.npz')[0]
+import tensorflow as tf
+reader = tf.train.NewCheckpointReader('D://Codes/NSE/src/naive_lstm/save/step2700.ckpt')
+var = reader.get_variable_to_shape_map()
+# for key in var:
+#     print('tensorname:', key)
+turned_vecs = reader.get_tensor('embeddings/embeddings/embeddings')
+print(np.shape(turned_vecs))
 
-sd_ori = find_senti_direction(words, word2index, vecs)
-sd_turned = find_senti_direction(words, word2index, turned_vecs)
-# sd_turned_2 = find_senti_direction(words, word2index, turned_vecs_2)
-# print(np.linalg.norm(sd_ori), np.linalg.norm(sd_turned))
-print(np.sum(np.multiply(sd_ori, sd_turned)))
+# sd_ori = find_senti_direction(words, word2index, vecs)
+# sd_turned = find_senti_direction(words, word2index, turned_vecs)
+# # sd_turned_2 = find_senti_direction(words, word2index, turned_vecs_2)
+# # print(np.linalg.norm(sd_ori), np.linalg.norm(sd_turned))
+# print(np.sum(np.multiply(sd_ori, sd_turned)))
 
-# analysis_pca(words, word2index, vecs)
+analysis_pca(words, word2index, turned_vecs)

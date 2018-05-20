@@ -32,7 +32,7 @@ sub_words_n = [line[1] for line in wordpair]
 
 
 def find_senti_direction(topK=1):
-    picked = we.WordEmbedding('D://Codes/NSE/data/used/embeddings/word-picked.vec')
+    picked = we.WordEmbedding('D://Codes/NSE/data/used/embeddings/fasttext/word-picked.vec')
 
     definitional = []
 
@@ -53,7 +53,7 @@ def find_senti_direction(topK=1):
 
 
 def refine_word(lexicon, direction, alpha=0.5):
-    picked = we.WordEmbedding('D://Codes/NSE/data/used/embeddings/word-picked.vec')
+    picked = we.WordEmbedding('D://Codes/NSE/data/used/embeddings/fasttext/word-picked.vec')
 
     words = {}
     vecs = {}
@@ -73,7 +73,7 @@ def refine_word(lexicon, direction, alpha=0.5):
             new_vec = vec_vertical_to_senti + alpha * new_vec_senti
             new_vec = new_vec / np.linalg.norm(new_vec)
             vecs[word] = new_vec
-    save(words.keys(), vecs.values(), 'D://Codes/NSE/data/used/embeddings/'+str(alpha)+'-refined-word-picked.vec')
+    # save(words.keys(), vecs.values(), 'D://Codes/NSE/data/used/embeddings/'+str(alpha)+'-refined-word-picked.vec')
 
 
 
@@ -120,9 +120,9 @@ def get_simverb3500():
         print('Get %s pairs from SimVerb-3500' % np.shape(evals)[0])
         return evals
 
-# lexicon = get_sentiwords()
-# dire = find_senti_direction(1)
-# refine_word(lexicon, dire, alpha=10)
+lexicon = get_sentiwords()
+dire = find_senti_direction(1)
+# refine_word(lexicon, dire, alpha=20)
 
 
 def eval_w2v_wordsim(simlex):
@@ -147,4 +147,4 @@ def eval_w2v_wordsim(simlex):
 
 
 
-eval_w2v_wordsim(get_simverb3500())
+# eval_w2v_wordsim(get_simverb3500())
