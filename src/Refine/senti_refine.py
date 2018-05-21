@@ -65,7 +65,7 @@ def refine_word(lexicon, direction, alpha=0.5):
         else:
             words[word] = score
             vec = picked.vecs[picked.index[word]]
-            vec_senti = np.sum(np.multiply(vec, direction)) / (np.linalg.norm(vec) * np.linalg.norm(direction)) * direction
+            vec_senti = np.sum(np.multiply(vec, direction)) / (np.linalg.norm(direction) * np.linalg.norm(direction)) * direction
             vec_vertical_to_senti = vec - vec_senti
             # print(np.linalg.norm(vec_senti))
             # print(np.linalg.norm(vec_vertical_to_senti))

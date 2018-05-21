@@ -5,6 +5,7 @@ import pandas as pd
 from scipy import stats
 import pickle
 
+
 def find_naive_senti_direction(words, word2index, vecs):
     wordpair = [line.strip().split() for line in open('D://Codes/NSE/data/used/seeds/wordpairs-greater-than-0.5').readlines()]
     sub_words_p = [line[0] for line in wordpair]
@@ -199,7 +200,7 @@ def distill(vecs, direction, savepath, beta=0):
     new_vecs = []
     for vec in vecs:
         vec_senti = np.sum(np.multiply(vec, direction)) / (
-                    np.linalg.norm(vec) * np.linalg.norm(direction)) * direction
+                    np.linalg.norm(direction) * np.linalg.norm(direction)) * direction
         vec_vertical_to_senti = vec - vec_senti
         # print(np.shape(vec_senti))
         new_vec = beta * vec_vertical_to_senti + vec_senti
@@ -209,6 +210,28 @@ def distill(vecs, direction, savepath, beta=0):
     np.save(savepath, new_vecs)
 
 
+def rev_distill(vecs, direction, savepath, gama=0.05):
+    new_vecs = []
+    for vec in vecs:
+        vec_senti = np.sum(np.multiply(vec, direction)) / (
+                    np.linalg.norm(direction) * np.linalg.norm(direction)) * direction
+        vec_vertical_to_senti = vec - vec_senti
+        print(np.linalg.norm(vec), np.linalg.norm(vec_senti), np.linalg.norm(vec_vertical_to_senti))
+        print(np.sum(np.multiply(vec_senti, vec_vertical_to_senti)))
+        # print(np.shape(vec_senti))
+        new_vec = vec_vertical_to_senti + gama * vec_senti
+        # print(np.shape(new_vec))
+        new_vec = new_vec / np.linalg.norm(new_vec)
+        new_vecs.append(new_vec)
+    np.save(savepath, new_vecs)
+
+
+def ver_length_norm(vecs, savepath):
+    new_vecs = []
+    for vec in vecs:
+        new_vecs.append(vec / np.linalg.norm(vec))
+    np.save(savepath, new_vecs)
+
 
 
 import tensorflow as tf
@@ -217,20 +240,22 @@ import tensorlayer as tl
 
 vocab = [word.strip() for word in open('D://Codes/NSE/data/used/embeddings/word-picked').readlines()]
 word2index = {w: i for i, w in enumerate(vocab)}
-turned_vecs = tl.files.load_npz(name='D://Codes/NSE/src/fasttext/save/uninited_unigram/model_1.npz')[0]
+turned_vecs = tl.files.load_npz(name='D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4.npz')[0]
 #
 # lexicon = get_sentiwords()
 # find_P_N_vecs(vocab, word2index, turned_vecs, lexicon)
 
 # dire_naive = find_naive_senti_direction(vocab, word2index, turned_vecs) # score: 0.74241
 # dire_mean = find_p_n_mean_senti_direction() # score: 0.53045
-# dire_PCA = find_p_n_PCA_senti_direction() # score: 0.74010
+dire_PCA = find_p_n_PCA_senti_direction() # score: 0.74010
 # dire_randomPCA = find_random_PCA_senti_direction(turned_vecs) # score: 0.50+-
 # dire_lda = p_n_lda()
 
-dire_n, dire_p = eval_p_n_principle_dire_similarity() # score: 0.78620
+# dire_n, dire_p = eval_p_n_principle_dire_similarity() # score: 0.78620
 
-distill(turned_vecs, dire_n, 'D://Codes/NSE/src/fasttext/save/uninited_unigram/model_1_distilled', beta=0)
+# distill(turned_vecs, dire_PCA, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_distilled', beta=0)
+rev_distill(turned_vecs, dire_PCA, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_rev_distilled', gama=0)
+# ver_length_norm(turned_vecs, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_normed')
 
 #
 # # sd_1 = find_p_n_PCA_senti_direction()

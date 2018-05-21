@@ -73,5 +73,6 @@ def eval_w2v_wordsim(words, word2index, vecs, simlex):
 
 
 words, word2index = get_vocab('D://Codes/NSE/data/used/embeddings/word-picked')
-turned_vecs = tl.files.load_npz(name='D://Codes/NSE/src/fasttext/save/inited_refined_2_unigram/model_0.npz')[0]
-eval_w2v_wordsim(words, word2index, turned_vecs, get_wordsim353())
+# turned_vecs = tl.files.load_npz(name='D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4.npz')[0]
+rev_distilled_vecs = np.load('D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_rev_distilled.npy')
+eval_w2v_wordsim(words, word2index, rev_distilled_vecs, get_wordsim353())

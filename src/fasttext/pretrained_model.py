@@ -314,7 +314,7 @@ def load_and_test_model():
 
 
 
-def load_and_test_distilled_model():
+def load_and_test_subspace_vec_model():
     X_test, y_test = load_and_preprocess_imdb_test_data(N_GRAM)
     classifier = FastTextClassifier(
         vocab_size=VOCAB_SIZE,
@@ -323,8 +323,8 @@ def load_and_test_distilled_model():
         n_labels=2,
     )
     with tf.Session() as sess:
-        classifier.load(sess, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_1.npz')
-        distilled_vecs = np.load('D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_1_distilled.npy')
+        classifier.load(sess, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4.npz')
+        distilled_vecs = np.load('D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_rev_distilled.npy')
         tl.files.assign_params(sess, [distilled_vecs], classifier.network)
 
         start_time = time.time()
@@ -348,4 +348,4 @@ if __name__ == '__main__':
     # with tf.device("/cpu:0"):
     #     train_valid_and_save_model()
     # load_and_test_model()
-    load_and_test_distilled_model()
+    load_and_test_subspace_vec_model()
