@@ -166,7 +166,7 @@ def train_valid_and_save_model():
                 i += 1
                 sess.run(
                     classifier.train_op, feed_dict={
-                        classifier.inputs: tl.prepro.pad_sequences(X_batch),
+                        classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
                         classifier.labels: y_batch,
                     }
                 )
@@ -240,8 +240,8 @@ def load_and_test_distilled_model():
         for X_batch, y_batch in tl.iterate.minibatches(X_test, y_test, batch_size=BATCH_SIZE, shuffle=False):
             acc = sess.run(
                 classifier.accuracy, feed_dict={
-                    classifier.inputs: tl.prepro.pad_sequences(X_batch, value=0),
-                    # classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
+                    # classifier.inputs: tl.prepro.pad_sequences(X_batch, value=0),
+                    classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
                     classifier.labels: y_batch,
                     # classifier.embedding.pretrained_embeddings: pretrained_wv
                 })
@@ -253,7 +253,7 @@ def load_and_test_distilled_model():
 
 
 if __name__ == '__main__':
-    # with tf.device("/cpu:0"):
-        # train_valid_and_save_model()
+    with tf.device("/cpu:0"):
+        train_valid_and_save_model()
         # load_and_test_model()
-    load_and_test_distilled_model()
+    # load_and_test_distilled_model()

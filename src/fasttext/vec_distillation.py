@@ -56,11 +56,11 @@ def find_P_N_vecs(vocab, word2index, vecs, lexicon):
                 wp[word] = score
                 vecs_p[word] = vecs[word2index[word]]
 
-    pickle.dump({'wn': wn, 'vecn': vecs_n, 'wp': wp, 'vecp': vecs_p}, open('D://Codes/NSE/data/used/embeddings/p_n_vecs_uninited.pkl', 'wb'))
+    pickle.dump({'wn': wn, 'vecn': vecs_n, 'wp': wp, 'vecp': vecs_p}, open('D://Codes/NSE/data/used/embeddings/p_n_vecs_inited_refined_20_unigram_4.pkl', 'wb'))
 
 
-def find_p_n_PCA_senti_direction():
-    p_n_vecs = pickle.load(open('D://Codes/NSE/data/used/embeddings/p_n_vecs_inited_refined_20_unigram_3315.pkl', 'rb'))
+def find_p_n_PCA_senti_directions(topk=1):
+    p_n_vecs = pickle.load(open('D://Codes/NSE/data/used/embeddings/p_n_vecs_inited_refined_20_unigram_4.pkl', 'rb'))
     wn = p_n_vecs['wn']
     wp = p_n_vecs['wp']
     vecn = p_n_vecs['vecn']
@@ -69,28 +69,28 @@ def find_p_n_PCA_senti_direction():
     print(np.shape(matrix))
     pca = PCA(n_components=10)
     pca.fit(matrix)
-    senti_direction = pca.components_[0]
+    senti_direction_list = pca.components_[:topk]
     print(pca.explained_variance_ratio_)
     # dire_0 = picked.vecs[picked.index[definitional[4][0]]] - picked.vecs[picked.index[definitional[4][1]]]
     # dire_0 /= np.linalg.norm(dire_0)
-    return senti_direction
+    return senti_direction_list
 
 
-def find_random_PCA_senti_direction(vecs):
+def find_random_PCA_senti_directions(vecs, topk=1):
     indexs = np.random.choice(64189, 40)
     matrix = vecs[indexs]
     print(np.shape(matrix))
     pca = PCA(n_components=10)
     pca.fit(matrix)
-    random_direction = pca.components_[0]
+    random_senti_direction_list = pca.components_[:topk]
     print(pca.explained_variance_ratio_)
     # dire_0 = picked.vecs[picked.index[definitional[4][0]]] - picked.vecs[picked.index[definitional[4][1]]]
     # dire_0 /= np.linalg.norm(dire_0)
-    return random_direction
+    return random_senti_direction_list
 
 
 def find_p_n_mean_senti_direction():
-    p_n_vecs = pickle.load(open('D://Codes/NSE/data/used/embeddings/p_n_vecs_inited_refined_20_unigram_3315.pkl', 'rb'))
+    p_n_vecs = pickle.load(open('D://Codes/NSE/data/used/embeddings/p_n_vecs_inited_refined_20_unigram_4.pkl', 'rb'))
     wn = p_n_vecs['wn']
     wp = p_n_vecs['wp']
     vecn = p_n_vecs['vecn'].values()
@@ -130,7 +130,7 @@ def get_sentiwords():
 
 
 def p_n_lda():
-    p_n_vecs = pickle.load(open('D://Codes/NSE/data/used/embeddings/p_n_vecs_inited_refined_20_unigram_3315.pkl', 'rb'))
+    p_n_vecs = pickle.load(open('D://Codes/NSE/data/used/embeddings/p_n_vecs_inited_refined_20_unigram_4.pkl', 'rb'))
     wn = p_n_vecs['wn']
     wp = p_n_vecs['wp']
     c1 = []
@@ -177,7 +177,7 @@ def p_n_lda():
 
 
 def eval_p_n_principle_dire_similarity():
-    p_n_vecs = pickle.load(open('D://Codes/NSE/data/used/embeddings/p_n_vecs_inited_refined_20_unigram_3315.pkl', 'rb'))
+    p_n_vecs = pickle.load(open('D://Codes/NSE/data/used/embeddings/p_n_vecs_inited_refined_20_unigram_4.pkl', 'rb'))
     vecn = [list(i) for i in p_n_vecs['vecn'].values()]
     print(np.shape(vecn))
     pca_n = PCA(n_components=10)
@@ -210,14 +210,25 @@ def distill(vecs, direction, savepath, beta=0):
     np.save(savepath, new_vecs)
 
 
+def distill_multi(vecs, directions, savepath):
+    new_vecs = []
+    for vec in vecs:
+        new_vec = np.zeros_like(vec)
+        for dire in directions:
+            vec_senti = np.sum(np.multiply(vec, dire)) / (
+                        np.linalg.norm(dire) * np.linalg.norm(dire)) * dire
+            new_vec += vec_senti
+        new_vec = new_vec / np.linalg.norm(new_vec)
+        new_vecs.append(new_vec)
+    np.save(savepath, new_vecs)
+
+
 def rev_distill(vecs, direction, savepath, gama=0.05):
     new_vecs = []
     for vec in vecs:
         vec_senti = np.sum(np.multiply(vec, direction)) / (
                     np.linalg.norm(direction) * np.linalg.norm(direction)) * direction
         vec_vertical_to_senti = vec - vec_senti
-        print(np.linalg.norm(vec), np.linalg.norm(vec_senti), np.linalg.norm(vec_vertical_to_senti))
-        print(np.sum(np.multiply(vec_senti, vec_vertical_to_senti)))
         # print(np.shape(vec_senti))
         new_vec = vec_vertical_to_senti + gama * vec_senti
         # print(np.shape(new_vec))
@@ -247,19 +258,18 @@ turned_vecs = tl.files.load_npz(name='D://Codes/NSE/src/fasttext/save/inited_ref
 
 # dire_naive = find_naive_senti_direction(vocab, word2index, turned_vecs) # score: 0.74241
 # dire_mean = find_p_n_mean_senti_direction() # score: 0.53045
-dire_PCA = find_p_n_PCA_senti_direction() # score: 0.74010
-# dire_randomPCA = find_random_PCA_senti_direction(turned_vecs) # score: 0.50+-
+# dire_PCA_list = find_p_n_PCA_senti_directions(topk=15) # score: 0.74010
+# dire_randomPCA_list = find_random_PCA_senti_directions(turned_vecs, topk=15) # score: 0.74
 # dire_lda = p_n_lda()
 
-# dire_n, dire_p = eval_p_n_principle_dire_similarity() # score: 0.78620
+dire_n, dire_p = eval_p_n_principle_dire_similarity() # score: 0.78620
 
-# distill(turned_vecs, dire_PCA, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_distilled', beta=0)
-rev_distill(turned_vecs, dire_PCA, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_rev_distilled', gama=0)
+# distill(turned_vecs, dire_PCA_list[0], 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_distilled', beta=0)
+# distill_multi(turned_vecs, dire_randomPCA_list, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_distilled')
+# rev_distill(turned_vecs, dire_mean, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_rev_distilled', gama=0)
 # ver_length_norm(turned_vecs, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_normed')
 
-#
-# # sd_1 = find_p_n_PCA_senti_direction()
-# # sd_2 = find_p_n_mean_senti_direction()
-# print(np.sum(np.multiply(dire_PCA, dire_n)))
+
+# print(np.sum(np.multiply(dire_randomPCA_, dire_randomPCA)))
 
 

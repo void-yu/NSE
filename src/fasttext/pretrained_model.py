@@ -32,8 +32,8 @@ N_EPOCH = 5
 BATCH_SIZE = 32
 
 # Path to which to save the trained model
-MODEL_FILE_PATH = 'save/inited_refined_2_unigram/'
-PRETRAINED_VECS_PATH = 'D://Codes/NSE/data/used/embeddings/fasttext/20-refined-word-picked.vec'
+MODEL_FILE_PATH = 'save/inited_refined_20_unigram/'
+PRETRAINED_VECS_PATH = 'D://Codes/NSE/data/used/embeddings/20-refined-word-picked.vec'
 
 # t_pkl = open('D://Codes/NSE/data/output/train_data.pkl', 'rb')
 # train = pickle.load(t_pkl)
@@ -289,7 +289,7 @@ def load_and_test_model():
         # sess.run(init)
         foldername = MODEL_FILE_PATH
         pathDir = os.listdir(foldername)
-        for filename in pathDir:
+        for filename in ['model_0.npz', 'model_1.npz', 'model_2.npz', 'model_3.npz', 'model_4.npz']:
             fullname = os.path.join('%s/%s' % (foldername, filename))
             print(fullname)
             classifier.load(sess, fullname)
@@ -300,8 +300,8 @@ def load_and_test_model():
             for X_batch, y_batch in tl.iterate.minibatches(X_test, y_test, batch_size=BATCH_SIZE, shuffle=False):
                 acc = sess.run(
                     classifier.accuracy, feed_dict={
-                        # classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
-                        classifier.inputs: tl.prepro.pad_sequences(X_batch, value=0),
+                        classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
+                        # classifier.inputs: tl.prepro.pad_sequences(X_batch, value=0),
                         classifier.labels: y_batch,
                         # classifier.embedding.pretrained_embeddings: pretrained_wv
                     })
@@ -324,7 +324,7 @@ def load_and_test_subspace_vec_model():
     )
     with tf.Session() as sess:
         classifier.load(sess, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4.npz')
-        distilled_vecs = np.load('D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_rev_distilled.npy')
+        distilled_vecs = np.load('D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_distilled.npy')
         tl.files.assign_params(sess, [distilled_vecs], classifier.network)
 
         start_time = time.time()
@@ -333,8 +333,8 @@ def load_and_test_subspace_vec_model():
         for X_batch, y_batch in tl.iterate.minibatches(X_test, y_test, batch_size=BATCH_SIZE, shuffle=False):
             acc = sess.run(
                 classifier.accuracy, feed_dict={
-                    classifier.inputs: tl.prepro.pad_sequences(X_batch, value=0),
-                    # classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
+                    # classifier.inputs: tl.prepro.pad_sequences(X_batch, value=0),
+                    classifier.inputs: tl.prepro.pad_sequences(X_batch, value=64189),
                     classifier.labels: y_batch,
                     # classifier.embedding.pretrained_embeddings: pretrained_wv
                 })
