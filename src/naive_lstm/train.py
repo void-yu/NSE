@@ -25,6 +25,17 @@ flags.DEFINE_string("ckpt_dir", "D://Codes/NSE/src/naive_lstm/save", "")
 
 FLAGS = flags.FLAGS
 
+
+def restore_from_checkpoint(sess, saver, dir):
+    ckpt = tf.train.get_checkpoint_state(dir)
+    # print(ckpt)
+    if not ckpt or not ckpt.model_checkpoint_path:
+        print('No checkpoint found at {}'.format(dir))
+        return False
+    saver.restore(sess, ckpt.model_checkpoint_path)
+    return True
+
+
 def train_sent(sess):
     print("Read file --")
     start = time.time()
@@ -103,9 +114,66 @@ def train_sent(sess):
     end = time.time()
     print("Building model finished -- {:.4f} sec".format(end - start))
 
+
+def test_sent(sess):
+    print("Read file --")
+    start = time.time()
+
+    # id2word, word2id = reader.read_glossary()
+    # pretrained_wv = np.random.uniform(-1, 1, [FLAGS.vocab_size, FLAGS.embedding_size])
+
+    testfile = open('D://Codes/NSE/data/output/splited_test_data.pkl', 'rb')
+    testdata = pickle.load(testfile)
+    test_seqs = testdata['seqs']
+    test_tars = testdata['tars']
+
+    end = time.time()
+    print("Read finished -- {:.4f} sec".format(end-start))
+
+    # Build model
+    print("Building model --")
+
+    model = LSTMModel(
+        seq_size=FLAGS.seq_lenth,
+        vocab_size=FLAGS.vocab_size,
+        embedding_size=FLAGS.embedding_size,
+        hidden_size=FLAGS.hidden_size,
+        attn_lenth=FLAGS.attn_lenth
+    )
+    model.buildTrainGraph()
+
+    saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=10)
+    # train_writer = tf.summary.FileWriter(logdir=FLAGS.tensorb_dir + '/train', graph=sess.graph)
+    restore_from_checkpoint(sess, saver, FLAGS.ckpt_dir)
+
+    i = 0
+    test_loss = list()
+    test_acc = list()
+    start_time = time.time()
+
+    for X_batch, y_batch in tl.iterate.minibatches(test_seqs, test_tars, batch_size=FLAGS.batch_size, shuffle=False):
+        i += 1
+
+        batch_loss, batch_acc = sess.run(
+            [model.loss, model.accuracy],
+            feed_dict={
+                model.inputs: X_batch,
+                model.labels: y_batch,
+            }
+        )
+        test_loss.append(batch_loss)
+        test_acc.append(batch_acc)
+
+    test_accuracy = np.mean(test_acc)
+    print('Test accuracy: %.5f' % test_accuracy)
+    print("took %.5fs" % (time.time() - start_time))
+
+
+
 def main(_):
     with tf.Session() as sess:
-        train_sent(sess)
+        # train_sent(sess)
+        test_sent(sess)
 
 if __name__ == '__main__':
     tf.app.run()

@@ -258,14 +258,14 @@ turned_vecs = tl.files.load_npz(name='D://Codes/NSE/src/fasttext/save/inited_ref
 
 # dire_naive = find_naive_senti_direction(vocab, word2index, turned_vecs) # score: 0.74241
 # dire_mean = find_p_n_mean_senti_direction() # score: 0.53045
-# dire_PCA_list = find_p_n_PCA_senti_directions(topk=15) # score: 0.74010
-# dire_randomPCA_list = find_random_PCA_senti_directions(turned_vecs, topk=15) # score: 0.74
+dire_PCA_list = find_p_n_PCA_senti_directions(topk=150) # score: 0.74010
+# dire_randomPCA_list = find_random_PCA_senti_directions(turned_vecs, topk=5) # score: 0.74
 # dire_lda = p_n_lda()
 
 dire_n, dire_p = eval_p_n_principle_dire_similarity() # score: 0.78620
 
 # distill(turned_vecs, dire_PCA_list[0], 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_distilled', beta=0)
-# distill_multi(turned_vecs, dire_randomPCA_list, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_distilled')
+distill_multi(turned_vecs, dire_PCA_list, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_distilled')
 # rev_distill(turned_vecs, dire_mean, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_rev_distilled', gama=0)
 # ver_length_norm(turned_vecs, 'D://Codes/NSE/src/fasttext/save/inited_refined_20_unigram/model_4_normed')
 
