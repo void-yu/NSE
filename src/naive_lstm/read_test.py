@@ -34,10 +34,7 @@ def sort_and_split(sequences, targets):
     seq_coll = []
     for seq, tar in zip(*(sequences, targets)):
         length = len(seq)
-        if length <= 50:
-            seq_buckets['50']['seqs'].append(seq)
-            seq_buckets['50']['tars'].append(tar)
-        elif length <= 100:
+        if length <= 100:
             seq_buckets['100']['seqs'].append(seq)
             seq_buckets['100']['tars'].append(tar)
         elif length <= 300:
@@ -56,8 +53,8 @@ def sort_and_split(sequences, targets):
         seq_buckets[key]['seqs'] = np.array(tl.prepro.pad_sequences(seq_buckets[key]['seqs'], maxlen=int(key), value=64191))
         seq_buckets[key]['tars'] = np.array(seq_buckets[key]['tars'])
         for index, seq in enumerate(seq_buckets[key]['seqs']):
-            for i in range(int(key) // 50):
-                new_seqs.append(seq[i*50:(i+1)*50])
+            for i in range(int(key) // 100):
+                new_seqs.append(seq[i*100:(i+1)*100])
                 new_tars.append(seq_buckets[key]['tars'][index])
     return new_seqs, new_tars
 
@@ -92,7 +89,7 @@ def load_and_preprocess_test_imdb_data():
 # X_train, y_train, X_valid, y_valid = load_and_preprocess_imdb_data()
 # X_train, y_train = sort_and_split(X_train, y_train)
 # X_valid, y_valid = sort_and_split(X_valid, y_valid)
-
+#
 # train = {'seqs': X_train, 'tars': y_train}
 # valid = {'seqs': X_valid, 'tars': y_valid}
 # t_p = open('D://Codes/NSE/data/output/splited_train_data.pkl', 'wb')
@@ -108,11 +105,11 @@ def load_and_preprocess_test_imdb_data():
 # pickle.dump(test, t_p)
 
 
-# t_p = open('D://Codes/NSE/data/output/splited_test_data.pkl', 'rb')
-# test = pickle.load(t_p)
-# print(np.shape(test['seqs']))
-# for seq in test['seqs']:
-#     print(seq)
+t_p = open('D://Codes/NSE/data/output/splited_test_data.pkl', 'rb')
+test = pickle.load(t_p)
+print(np.shape(test['seqs']))
+for seq in test['seqs']:
+    print(seq)
 
 
 

@@ -52,7 +52,7 @@ class WordEmbedding:
         print("*** Reading data from " + fname)
         if fname.endswith(".bin"):
             import gensim.models
-            model =gensim.models.KeyedVectors.load_word2vec_format(fname, binary=True)
+            model = gensim.models.KeyedVectors.load_word2vec_format(fname, binary=True)
             words = sorted([w for w in model.vocab], key=lambda w: model.vocab[w].index)
             vecs = [model[w] for w in words]
         else:

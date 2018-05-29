@@ -14,7 +14,7 @@ class LSTMModel(object):
                  hidden_size,
                  attn_lenth,
                  is_training=True,
-                 learning_rate=0.01):
+                 learning_rate=0.0001):
         self.seq_size = seq_size
         self.vocab_size = vocab_size
         self.embedding_size = embedding_size
@@ -53,13 +53,15 @@ class LSTMModel(object):
             self.lstm_fw_cell = tf.contrib.rnn.BasicLSTMCell(self.hidden_size, forget_bias=1.0, state_is_tuple=True)
             self.lstm_bw_cell = tf.contrib.rnn.BasicLSTMCell(self.hidden_size, forget_bias=1.0, state_is_tuple=True)
         with tf.name_scope('attention'), tf.variable_scope('attention'):
-            self.u1_w = tf.Variable(tf.truncated_normal([self.hidden_size*2, self.attn_lenth], stddev=0.1), name='attention_w')
+            # self.u1_w = tf.Variable(tf.truncated_normal([self.hidden_size*2, self.attn_lenth], stddev=0.1), name='attention_w')
+            self.u1_w = tf.Variable(tf.truncated_normal([self.hidden_size, self.attn_lenth], stddev=0.1), name='attention_w')
             self.u1_b = tf.Variable(tf.constant(0.1, shape=[self.attn_lenth]), name='attention_b')
             self.u2_w = tf.Variable(tf.truncated_normal([self.attn_lenth, 1], stddev=0.1), name='attention_u')
         with tf.name_scope('lastlayer'), tf.variable_scope('lastlayer'):
+            # self.sigmoid_weights = tf.Variable(tf.random_uniform(shape=[self.hidden_size*2, 1], minval=-1.0, maxval=1.0), name='sigmoid_w')
             self.sigmoid_weights = tf.Variable(tf.random_uniform(shape=[self.hidden_size*2, 1], minval=-1.0, maxval=1.0), name='sigmoid_w')
             self.sigmoid_biases = tf.Variable(tf.zeros([1]), name='sigmoid_b')
-
+        # self.global_step = tf.train.get_or_create_global_step()
 
     """
         arg:
@@ -86,18 +88,22 @@ class LSTMModel(object):
             drop_lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(cell=self.lstm_fw_cell, output_keep_prob=self.keep_prob)
             drop_lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(cell=self.lstm_bw_cell, output_keep_prob=self.keep_prob)
             rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(drop_lstm_fw_cell, drop_lstm_bw_cell, inputs, dtype=tf.float32)
+            # rnn_outputs, _ = tf.nn.dynamic_rnn(drop_lstm_fw_cell, inputs, dtype=tf.float32)
             rnn_outputs = tf.concat(rnn_outputs, axis=2)
 
         # attention
-        with tf.name_scope('attention'), tf.variable_scope('attention'):
-            alpha = tf.reshape(rnn_outputs, [-1, self.hidden_size*2])
-            alpha = tf.matmul(tf.nn.tanh(tf.matmul(alpha, self.u1_w) + self.u1_b), self.u2_w)
-            exp_alpha = tf.exp(tf.reshape(alpha, [-1, self.seq_size]))
-            sumed_exp_alpha = tf.reduce_sum(exp_alpha, axis=-1, keepdims=True)
-            alpha = exp_alpha / sumed_exp_alpha
-            self.alpha = alpha
-            alpha = tf.reshape(alpha, [-1, self.seq_size, 1])
-            rnn_outputs = rnn_outputs * alpha
+        # with tf.name_scope('attention'), tf.variable_scope('attention'):
+        #     # alpha = tf.reshape(rnn_outputs, [-1, self.hidden_size*2])
+        #     alpha = tf.reshape(rnn_outputs, [-1, self.hidden_size])
+        #     alpha = tf.matmul(tf.nn.tanh(tf.matmul(alpha, self.u1_w) + self.u1_b), self.u2_w)
+        #     exp_alpha = tf.exp(tf.reshape(alpha, [-1, self.seq_size]))
+        #     sumed_exp_alpha = tf.reduce_sum(exp_alpha, axis=-1, keepdims=True)
+        #     alpha = exp_alpha / sumed_exp_alpha
+        #     self.alpha = alpha
+        #     alpha = tf.reshape(alpha, [-1, self.seq_size, 1])
+        #     rnn_outputs = rnn_outputs * alpha
+        # rnn_outputs = tf.nn.dropout(rnn_outputs, keep_prob=self.keep_prob)
+        rnn_outputs = rnn_outputs[:, -1, :]
         return rnn_outputs
 
 
@@ -108,17 +114,18 @@ class LSTMModel(object):
             outputs - shape=[batch_size, relu]
     """
     def bi_sigmoid_layer(self, inputs):
-
-        inputs = tf.reshape(inputs, shape=[-1, self.hidden_size*2])
         logits = tf.matmul(inputs, self.sigmoid_weights) + self.sigmoid_biases
-        logits = tf.reshape(logits, shape=[-1, self.seq_size, 1])
         logits = tf.sigmoid(logits)
-        self.logits = logits
-        inputs = tf.reshape(inputs, shape=[-1, self.seq_size, self.hidden_size*2])
-        meaned_inputs = tf.reduce_mean(inputs, axis=1)
-        meaned_logits = tf.matmul(meaned_inputs, self.sigmoid_weights) + self.sigmoid_biases
-        return meaned_logits
-
+        return logits
+        # inputs = tf.reshape(inputs, shape=[-1, self.hidden_size])
+        # logits = tf.matmul(inputs, self.sigmoid_weights) + self.sigmoid_biases
+        # logits = tf.reshape(logits, shape=[-1, self.seq_size, 1])
+        # logits = tf.sigmoid(logits)
+        # self.logits = logits
+        # inputs = tf.reshape(inputs, shape=[-1, self.seq_size, self.hidden_size])
+        # meaned_inputs = tf.reduce_mean(inputs, axis=1)
+        # meaned_logits = tf.matmul(meaned_inputs, self.sigmoid_weights) + self.sigmoid_biases
+        # return meaned_logits
 
     """
         arg:
@@ -140,9 +147,9 @@ class LSTMModel(object):
 
         self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
 
-        self.train_scalar = tf.summary.scalar('train_loss', self.loss)
+        self.loss_scalar = tf.summary.scalar('loss', self.loss)
         self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.round(tf.sigmoid(inputs)), labels), tf.float32))
-
+        self.acc_scalar = tf.summary.scalar('acc', self.accuracy)
 
         self.raw_expection = tf.sigmoid(inputs)
         self.expection = tf.round(self.raw_expection)
